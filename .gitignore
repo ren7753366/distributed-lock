@@ -1,0 +1,8 @@
+*.iml;
+*.idea;
+*.gitignore;
+*.sh;
+*.classpath;
+*.project;
+*.settings;
+target
