@@ -6,41 +6,73 @@
  */
 package com.renms.lock.zk;
 
-import java.util.Random;
-
 public class ZkTest {
 
     public static void main(String[] args) {
-
-
 
         Runnable runnable = new Runnable() {
 
             public void run() {
 
-                //随机创建读锁和写锁
-                String lockType = ZkLock.READ_LOCK;
-                int value = new Random().nextInt(1000);
-                if(value%2==0){
-                    lockType = ZkLock.WRIET_LOCK;
-                }
+//                ZkExclusionLock lock = null;
+//                try {
+//                    lock = new ZkExclusionLock("10.182.19.194:2181","renms");
+//                    boolean locked = lock.lock(1000);
+//                    //获取锁成功，do someThing
+//                    Thread.sleep(200L);
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                } finally {
+//                    if (lock != null) {
+//                        lock.unlock();
+//                    }
+//                }
 
-                ZkLock lock = null;
+
+                ZkShareLock lock = null;
                 try {
-                    lock = new ZkLock("127.0.0.1:2181", "test1"+lockType);
-                    lock.lock();
+                    lock = new ZkShareLock("10.182.19.194:2181","renms");
+                    boolean locked = lock.readLock(1000);
                     //获取锁成功，do someThing
-
+                    Thread.sleep(200L);
+                } catch (Exception e) {
+                    e.printStackTrace();
                 } finally {
                     if (lock != null) {
                         lock.unlock();
                     }
                 }
+
+            }
+        };
+
+        Runnable writeRunnable = new Runnable() {
+
+            public void run() {
+                ZkShareLock lock = null;
+                try {
+                    lock = new ZkShareLock("10.182.19.194:2181","renms");
+                    boolean locked = lock.writeLock(1000);
+                    //获取锁成功，do someThing
+                    Thread.sleep(100L);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    if (lock != null) {
+                        lock.unlock();
+                    }
+                }
+
             }
         };
 
         for (int i = 0; i < 3; i++) {
+
+            Thread t2 = new Thread(writeRunnable);
+            t2.setName("写锁线程--"+i);
+            t2.start();
             Thread t = new Thread(runnable);
+            t.setName("读锁线程--"+i);
             t.start();
         }
     }

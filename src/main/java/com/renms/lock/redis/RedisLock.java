@@ -23,36 +23,59 @@ public class RedisLock {
         this.jedisPool = jedisPool;
     }
 
-
-    public String lock(String lockName) {
-        return lockWithTimeout(lockName,3,1000,5*60*1000);
-    }
     /**
-     * @param lockName     锁名称
-     * @param acquireTimes 重试次数
-     * @param acquireRate  重试频率
-     * @param timeout      锁超时时间
+     * 不重试
+     *
+     * @param lockName
      * @return
      */
-    public String lockWithTimeout(String lockName, int acquireTimes, long acquireRate, long timeout) {
-        Jedis conn = null;
-        String retIdentifier = null;
+    public String lock(String lockName) {
+        long timeout = 10;// 默认超时时间10s
+        int retryTimes = 0;
+        // 重试间隔毫秒
+        long retrySleepMills = 50;
+        return tryLockWithRetry(lockName, retryTimes, retrySleepMills, timeout);
+    }
+
+    /**
+     * 获取锁 重试
+     *
+     * @param lockName
+     * @return
+     */
+    public String lockWithRetry(String lockName) {
+        long timeout = 10;// 默认超时时间10s
+        int retryTimes = 10;
+        // 重试间隔毫秒
+        long retrySleepMills = 50;
+        return tryLockWithRetry(lockName, retryTimes, retrySleepMills, timeout);
+    }
+
+    /**
+     *
+     * @param lockName        锁名称
+     * @param retryTimes      重试次数
+     * @param retrySleepMills 重试等待时间
+     * @param timeout         锁超时时间
+     * @return
+     */
+    private String tryLockWithRetry(String lockName, int retryTimes, long retrySleepMills, long timeout) {
+        Jedis redis = null;
         try {
             // 获取连接
-            conn = jedisPool.getResource();
-            String threadId = Thread.currentThread().getId()+"";
+            redis = jedisPool.getResource();
+            String threadId = String.valueOf(Thread.currentThread().getId());
             // 锁名
             String lockKey = "lock_" + lockName;
 
-            while (acquireTimes > 0) {
-                acquireTimes--;
-
-                String result = conn.set(lockKey, threadId, SET_IF_NOT_EXIST, SET_WITH_EXPIRE_TIME, timeout);
+            while (retryTimes > 0) {
+                retryTimes--;
+                String result = redis.set(lockKey, threadId, SET_IF_NOT_EXIST, SET_WITH_EXPIRE_TIME, timeout);
                 if (LOCK_SUCCESS.equals(result)) {
                     return threadId;
                 }
                 try {
-                    Thread.sleep(acquireRate);
+                    Thread.sleep(retrySleepMills);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -60,8 +83,8 @@ public class RedisLock {
         } catch (JedisException e) {
             e.printStackTrace();
         } finally {
-            if (conn != null) {
-                conn.close();
+            if (redis != null) {
+                redis.close();
             }
         }
         return null;
@@ -75,17 +98,17 @@ public class RedisLock {
      * @return
      */
     public boolean releaseLock(String lockName, String identifier) {
-        if(identifier == null){
+        if (identifier == null) {
             return true;
         }
         Jedis conn = null;
         String lockKey = "lock_" + lockName;
         try {
             conn = jedisPool.getResource();
-
             String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
             Object result = conn.eval(script, Collections.singletonList(lockKey), Collections.singletonList(identifier));
 
+            //release success
             if ("1".equals(result)) {
                 return true;
             }
