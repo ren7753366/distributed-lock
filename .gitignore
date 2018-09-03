@@ -1,8 +1,9 @@
-*.iml;
-*.idea;
-*.gitignore;
-*.sh;
-*.classpath;
-*.project;
-*.settings;
-target
+*.iml
+.idea/
+*/target
+.project
+.metadata/
+*.class
+*.war
+*.swp
+*.jar
